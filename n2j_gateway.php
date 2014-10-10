@@ -1,5 +1,5 @@
 #!/usr/local/bin/php -q
-<?
+<?php
 /*
 PHPN2J_Gateway | Standalone N2J Gateway "NNTP to JNTP" for Inn
 
@@ -29,9 +29,9 @@ Copy this file and rename it wathever you want.
 Better is to copy it in path_to_inn/bin and keep the name (in FreeBSD: /usr/local/news/bin/n2j_gateway.php).
 Set the executable bit : chmod +x /usr/local/news/bin/n2j_gateway.php
 Inn your newsfeeds file, for example :
-JNTP!/from-jntp:[group pattern]:Tp,Wf:/usr/local/news/bin/n2j_gateway.php %s [server] 
+JNTP!/from-jntp:[group pattern]:Tp,Wf:/usr/local/news/bin/n2j_gateway.php %s [server] [from (optional)]
 
-Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server]
+Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server] [from (optional)] 
 
 You can now the token of an Usenet article with the command :
 /usr/local/news/bin/grephistory '<Message-ID>'
@@ -41,14 +41,14 @@ You can now the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r01');			// Version number
+define('GW_VERSION', '0.93.r02');			// Version number
 
-define('FROM', 'your.domain.tld');			// this fqdn MUST match with the source IP
-define('PATH', 'n2J.your.domain.tld');		// what will be in the Path section of the NNTP Article
+$domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
+define('PATH', 'n2J.'.$domain);				// what will be in the Path section of the NNTP Article
 											// If not set, FROM will be used
 define('ACTIVE_LOG', 1);					// Set to true for logging 
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
-define('LOG_FILE', 'n2j.log');				// Name of the log file (must be writable by news user)
+define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file (LOG_PATH must be writable by news user)
 define('SM_PATH', '/usr/local/news/bin/sm');
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
@@ -59,12 +59,13 @@ if (!extension_loaded('curl')) 		{ fwrite(STDERR, "CURL Extension is missing.\n"
 if (!extension_loaded('mbstring')) 	{ fwrite(STDERR, "mbstring extension is missing.\n"); 	exit(1); }
 if (!extension_loaded('iconv')) 	{ fwrite(STDERR, "iconv extension is missing.\n"); 		exit(1); }
 if (!extension_loaded('json'))		{ fwrite(STDERR, "json extension is missing.\n");  		exit(1); }
-if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exex disabled.\n"); 			exit(1); }
+if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exec disabled.\n"); 			exit(1); }
 /*--------------------------------*/
 
 if (isset($argv)) {
 	if (!empty($argv[1])) $token = $argv[1];	else { fwrite(STDERR, "token is missing.\n");	exit(1); }
 	if (!empty($argv[2])) $server = $argv[2];	else { fwrite(STDERR, "server is missing.\n");	exit(1); }
+	if (!empty($argv[3])) $domain = $argv[3];	// Set From with the 3rd argv
 }
 
 $CURL = curl_init();
@@ -85,7 +86,7 @@ $options = array(
 $post = null;
 $post[0] = "ihave";
 $post[1]{'Jid'} = array($article{'Jid'});
-$post[1]{'From'} = FROM;
+$post[1]{'From'} = $domain;
 
 $post = json_encode($post);
 $options[CURLOPT_POSTFIELDS] = $post;
@@ -96,23 +97,21 @@ $reponse = curl_exec($CURL);
 NNTP::logGateway($reponse, $server, '<');
 $reponse = json_decode($reponse, true);
 
-if($reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0)
+if($reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0 && $reponse[1]{'Jid'}[0] === $article{'Jid'})
 {
-	if ($reponse[1]{'Jid'}[0] === $article{'Jid'}) {
-		$post = array();
-		$post[0] = "diffuse";
-		$post[1]{'From'} = FROM;
-		$post[1]{'Packet'} = $article;
+	$post = array();
+	$post[0] = "diffuse";
+	$post[1]{'From'} = $domain;
+	$post[1]{'Packet'} = $article;
 
-		$post = json_encode($post);
-		$options[CURLOPT_POSTFIELDS] = $post;
-		NNTP::logGateway($post, $server, '>');
+	$post = json_encode($post);
+	$options[CURLOPT_POSTFIELDS] = $post;
+	NNTP::logGateway($post, $server, '>');
 
-		curl_setopt_array($CURL, $options);
-		$reponse = curl_exec($CURL);
-		NNTP::logGateway($reponse, $server, '<');
-		$reponse = json_decode($reponse, true);
-	}
+	curl_setopt_array($CURL, $options);
+	$reponse = curl_exec($CURL);
+	NNTP::logGateway($reponse, $server, '<');
+	$reponse = json_decode($reponse, true);
 }
 
 curl_close($CURL);
@@ -310,25 +309,25 @@ class NNTP
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'NNTP-Posting-Date';
+			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'NNTP-Posting-Date';
 		}
 		elseif($article{'Data'}{'NNTPHeaders'}{'Injection-Date'})
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Injection-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Injection-Date';		
+			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Injection-Date';		
 		}
 		elseif(isset($xtracedate))
 		{
 			$injection_date = new DateTime($xtracedate);
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'X-Trace';			
+			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'X-Trace';			
 		}
 		elseif($article{'Data'}{'NNTPHeaders'}{'Date'})
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Date';	
+			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Date';	
 		}
 		else
 		{
@@ -341,7 +340,7 @@ class NNTP
 		if ($injection_date->getTimestamp() > $now->getTimestamp()) 
 		{
 			$date_offset = $now->diff($injection_date);
-			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Offset'} = $date_offset->format('%R%H:%I:%S');
+			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Offset'} = $date_offset->format('%R%H:%I:%S');
 			$injection_date = $now;
 		}
 		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
