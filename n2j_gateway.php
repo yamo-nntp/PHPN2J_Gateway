@@ -28,12 +28,12 @@ Usage :
 Copy this file and rename it wathever you want.
 Better is to copy it in path_to_inn/bin and keep the name (in FreeBSD: /usr/local/news/bin/n2j_gateway.php).
 Set the executable bit : chmod +x /usr/local/news/bin/n2j_gateway.php
-Inn your newsfeeds file, for example :
+Configure your newsfeeds file, for example :
 JNTP!/from-jntp:[group pattern]:Tp,Wf:/usr/local/news/bin/n2j_gateway.php %s [server] [from (optional)]
 
 Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server] [from (optional)] 
 
-You can now the token of an Usenet article with the command :
+You can know the token of an Usenet article with the command :
 /usr/local/news/bin/grephistory '<Message-ID>'
 */
 
@@ -41,15 +41,16 @@ You can now the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r02');			// Version number
+define('GW_VERSION', '0.93.r03');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
 define('PATH', 'n2J.'.$domain);				// what will be in the Path section of the NNTP Article
-											// If not set, FROM will be used
-define('ACTIVE_LOG', 1);					// Set to true for logging 
+											// If not set, $domain will be used
+define('LOG_SYSLOG', 1);					// Set to true for logging to syslog (news.notice)											
+define('ACTIVE_LOG', 0);					// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
 define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file (LOG_PATH must be writable by news user)
-define('SM_PATH', '/usr/local/news/bin/sm');
+define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
 /*--------------------------------*/
@@ -354,12 +355,18 @@ class NNTP
 	
 	static function logGateway($post, $server, $direct = '<')
 	{
-		if(ACTIVE_LOG)
+		if(ACTIVE_LOG)	// Log to file
 		{
 			$handle = fopen(LOG_PATH.'/'.LOG_FILE, 'a');
 			$put = '['.date(DATE_RFC822).'] ['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300))."\n";
 			fwrite($handle, $put);
 			fclose($handle);
+		}
+		if(LOG_SYSLOG)	// Log to syslog (news.notice)
+		{
+			openlog("php_n2jgateway ", LOG_PID | LOG_PERROR, LOG_NEWS);
+			syslog(LOG_NOTICE, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
+			closelog();
 		}
 	}
 }
