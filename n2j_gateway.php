@@ -40,22 +40,323 @@ You can now the token of an Usenet article with the command :
 /*---- CONFIGURATION SECTION -----*/
 error_reporting(E_ALL);					// For debug only
 
+define('NAME', 'PHPN2J_Gateway');		// Name of this script
+define('VERSION', '0.93.r01');			// Version number
+
 define('FROM', 'your.fqdn.domain');		// this fqdn MUST match with the source IP
 define('PATH', 'nntp_path');			// what will be in the Path section of the NNTP Article
 										// If not set, FROM will be used
 define('ACTIVE_LOG', 0);				// Set to true for logging 
 define('LOG_PATH', '/var/log/news');	// Path where is the logfile (must be writable by news user)
-define('LOG_FEED_NAME', 'n2j.log');		// Name of the log file (must be writable by news user)
+define('LOG_FILE', 'n2j.log');			// Name of the log file (must be writable by news user)
 
-date_default_timezone_set('UTC');		// Default Timezone to UTC (don't modify)
+date_default_timezone_set('UTC');		// Default Timezone to UTC (don't touch!!)
 /*--------------------------------*/
 
 /*-----    CHECK REQUIRE     -----*/ 
-if (!extension_loaded('curl')) 		{ echo "CURL Extension is missing.\n"; 	exit(); }
-if (!extension_loaded('json'))		{ echo "JSON Extension is missing.\n"; 	exit(); }
-if (!function_exists('shell_exec'))	{ echo "Shell exex disabled.\n"; 		exit(); }
+if (!extension_loaded('curl')) 		{ fwrite(STDERR, "CURL Extension is missing.\n"); 	exit(1); }
+if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exex disabled.\n"); 		exit(1); }
 /*--------------------------------*/
 
+if (isset($argv)) {
+	if (!empty($argv[1])) $token = $argv[1];	else { fwrite(STDERR, "token is missing.\n");	exit(1); }
+	if (!empty($argv[2])) $server = $argv[2];	else { fwrite(STDERR, "server is missing.\n");	exit(1); }
+}
 
+$CURL = curl_init();
+if(empty($CURL)) { fwrite(STDERR, "CURL not ready.\n"); exit(1); }
+
+$article = NNTP::articleN2J(shell_exec(SM_PATH." ".$token));
+
+$options = array(
+	CURLOPT_URL            => 'http://'.$server.'/jntp/',
+	CURLOPT_RETURNTRANSFER => true,
+	CURLOPT_HEADER         => false,
+	CURLOPT_FAILONERROR    => true,
+	CURLOPT_POST           => true,
+	CURLOPT_POSTFIELDS     => '',
+	CURLOPT_TIMEOUT	       => 20
+);
+
+$post = null;
+$post[0] = "ihave";
+$post[1]{'Jid'} = array($article{'Jid'});
+$post[1]{'From'} = DOMAIN;
+
+$post = json_encode($post);
+$options[CURLOPT_POSTFIELDS] = $post;
+NNTP::logGateway($post, $server, '>');
+
+curl_setopt_array($CURL, $options);
+$reponse = curl_exec($CURL);
+NNTP::logGateway($reponse, $server, '<');
+$reponse = json_decode($reponse, true);
+
+if($reponse[0] === 'iwant' && $reponse[1]{'Jid'}[0] === $article{'Jid'})
+{
+	$post = array();
+	$post[0] = "diffuse";
+	$post[1]{'From'} = DOMAIN;
+	$post[1]{'Packet'} = $article;
+
+	$post = json_encode($post);
+	$options[CURLOPT_POSTFIELDS] = $post;
+	NNTP::logGateway($post, $server, '>');
+
+	curl_setopt_array($CURL, $options);
+	$reponse = curl_exec($CURL);
+	NNTP::logGateway($reponse, $server, '<');
+	$reponse = json_decode($reponse, true);
+}
+
+curl_close($CURL);
+
+
+/*----- Class NNTP From PhpNemoServer -----*/
+
+class NNTP
+{
+	static function articleN2J($txt)
+	{
+		
+		$article = null;
+		$article{'Jid'} = null;
+		$article{'Route'} = array();
+		$article{'Data'}{'DataType'} = "Article";
+		$article{'Data'}{'References'} = array();
+		$article{'Data'}{'FollowupTo'} = array();
+		$article{'Data'}{'NNTPHeaders'} = null;
+		$article{'Data'}{'Protocol'} = "JNTP-Transitional";
+		$article{'Data'}{'Origin'} = "NNTP";
+
+		$pos =  strpos($txt, "\n\n");
+		$head = substr($txt, 0, $pos);
+		$body = substr($txt, $pos+2);
+		$lignes = preg_split("/\n(?![ \t])/", $head);
+		$isContentType = false;
+		$isInjectionDate = false;
+		mb_internal_encoding('UTF-8');
+
+		foreach ($lignes as $ligne)
+		{
+			$pos = strpos($ligne, ": ");
+			$header = substr($ligne, 0, $pos);
+			$champ = strtolower($header);
+			$value = substr($ligne, $pos + 2);
+
+			if($champ === "path" && strrpos($value, "!from-jntp"))
+			{
+				die();
+			}
+			elseif($champ === "jntp-protocol")
+			{
+				die();
+			}
+			elseif($champ === "control")
+			{
+				$args = array();
+				$args = explode(" ", trim($value));
+
+				if ($args[0] === 'cancel')
+				{
+					$args[1] = substr($args[1], 1, strlen($args[1])-2);
+					$article{'Data'}{'Control'} = $args;
+				}
+				elseif ($args[0] === 'newgroup')
+				{
+					$article{'Data'}{'Control'} = $args;
+				}
+				elseif ($args[0] === 'rmgroup')
+				{
+					$article{'Data'}{'Control'} = $args;
+				}
+				elseif ($args[0] === 'checkgroups')
+				{
+					$article{'Data'}{'Control'} = $args;
+				}
+			}
+			elseif($champ === "supersedes") 
+			{
+				$article{'Data'}{'Supersedes'} = substr($value, 1, strlen($value)-2);
+			}
+			elseif($champ === "message-id") 
+			{
+				$value = trim($value);
+				$article{'Jid'} = substr($value, 1, strlen($value)-2);
+			}
+			elseif($champ === "from") 
+			{
+				$from = iconv_mime_decode($value, 2, 'UTF-8');
+				preg_match('#<(.*?)>#', $from, $mail);
+				preg_match('#\s*(.*?)\s*<#', $from, $name);
+				$article{'Data'}{'FromName'} = "".$name[1];
+				$article{'Data'}{'FromMail'} = ($mail[1]) ? $mail[1] : $from;
+	
+			}
+			elseif($champ === "subject")
+			{
+				$article{'Data'}{'Subject'} = iconv_mime_decode($value, 2, 'UTF-8');
+			}
+			elseif($champ === "newsgroups")
+			{
+				$groupes = explode(",", $value);
+				foreach($groupes as $groupe)
+				{
+					$groupe = trim($groupe);
+				}
+				$article{'Data'}{'Newsgroups'} = $groupes;
+			}
+			elseif($champ === "followup-to") 
+			{
+				$groupes = explode(",", $value);
+				foreach($groupes as $groupe)
+				{
+					$groupe = trim($groupe);
+				}
+				$article{'Data'}{'FollowupTo'} = $groupes;
+			}
+			elseif($champ === "references")
+			{
+				$references = preg_split("/[<>, \n\t]+/", $value, 0, PREG_SPLIT_NO_EMPTY);
+				if(count($references) > 0)
+				{
+					$article{'Data'}{'References'} = preg_split("/[<>, \n\t]+/", $value, 0, PREG_SPLIT_NO_EMPTY);
+				}
+			}
+			elseif($champ === "user-agent")
+			{
+				$article{'Data'}{'UserAgent'} = $value;
+			}
+			elseif($champ === "reply-to")
+			{
+				$article{'Data'}{'ReplyTo'} = $value;
+			}
+			elseif($champ === "organization")
+			{
+				$article{'Data'}{'Organization'} = iconv_mime_decode($value, 2, 'UTF-8');
+			}
+			elseif($champ === "content-type")
+			{
+				$token = "[A-Za-z0-9\\-_.]+";
+				$optFWS = "(?:\n?[ \t])*";
+				$pattern = "charset{$optFWS}={$optFWS}(\"?)({$token})\\1";
+				$regexp = "/;{$optFWS}{$pattern}{$optFWS}(?:[(;]|$)/i";
+				$charset = preg_match($regexp, $value, $matches) ? $matches[2] : "UTF-8";
+				$isContentType = true;
+				$article{'Data'}{'NNTPHeaders'}{'Content-Type'} = $value;
+			}
+			elseif($champ === "content-transfer-encoding")
+			{
+				if(strstr(strtolower($value), "quoted-printable"))
+				{
+					$body = quoted_printable_decode($body);
+				}
+				elseif(strstr($value, "base64"))
+				{
+					$body = base64_decode($body);
+				}
+				$article{'Data'}{'NNTPHeaders'}{'Content-Transfer-Encoding'} = $value;
+			}
+			elseif($champ === "nntp-posting-date")
+			{
+				$article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'} = $value;
+			}
+			elseif($champ === "injection-date")
+			{
+				$article{'Data'}{'NNTPHeaders'}{'Injection-Date'} = $value;		
+			}
+			elseif($champ === "date")
+			{
+				$article{'Data'}{'NNTPHeaders'}{'Date'} = $value;
+			}
+			elseif($champ === "x-trace")
+			{
+				$article{'Data'}{'NNTPHeaders'}{'X-Trace'} = $value;
+				if (strpos($value,"("))
+				{
+					$start = strpos($value,"(") + 1;
+					$end =  strpos($value,")",$start);
+					$xtracedate = substr($xtrace, $start, $end - $start);
+				}
+			}
+			elseif ($champ !== "xref")
+			{
+				$article{'Data'}{'NNTPHeaders'}{$header} = $value;
+			}
+		}
+		
+		/*
+			Take first Référence if présent for ThreadID
+		*/
+		if(count($article{'Data'}{'References'}) == 0)
+		{
+			$article{'Data'}{'ThreadID'} = $article{'Jid'};
+		}
+
+		$article{'Data'}{'NNTPHeaders'}{'Gateway'} = NAME.' '.VERSION;
+		if(!$isContentType){
+			$charset = mb_detect_encoding($body);
+			$article{'Data'}{'NNTPHeaders'}{'CharsetDetect'} = $charset;
+		}
+
+
+		if($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'})
+		{
+			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'});
+			$injection_date->setTimezone(new DateTimeZone('UTC'));
+			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'NNTP-Posting-Date';
+		}
+		elseif($article{'Data'}{'NNTPHeaders'}{'Injection-Date'})
+		{
+			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Injection-Date'});
+			$injection_date->setTimezone(new DateTimeZone('UTC'));
+			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Injection-Date';		
+		}
+		elseif(isset($xtracedate))
+		{
+			$injection_date = new DateTime($xtracedate);
+			$injection_date->setTimezone(new DateTimeZone('UTC'));
+			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'X-Trace';			
+		}
+		elseif($article{'Data'}{'NNTPHeaders'}{'Date'})
+		{
+			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Date'});
+			$injection_date->setTimezone(new DateTimeZone('UTC'));
+			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Date';	
+		}
+		else
+		{
+			die();
+		}
+	
+		$now = new DateTime("now");
+		$now->setTimezone(new DateTimeZone('UTC'));
+
+		if ($injection_date->getTimestamp() > $now->getTimestamp()) 
+		{
+			$date_offset = $now->diff($injection_date);
+			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Offset'} = $date_offset->format('%R%H:%I:%S');
+			$injection_date = $now;
+		}
+		$article{'Data'}{'NNTPHeaders'}{'Path'} = 'n2j.gegeweb!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
+		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");
+		$pattern = '/\n-- \n((.|\n)*|$)/';
+		$body = preg_replace($pattern, "\n[signature]$1[/signature]", $body);
+		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
+
+		return $article;
+	}
+	
+	static function logGateway($post, $server, $direct = '<')
+	{
+		if(ACTIVE_LOG)
+		{
+			$handle = fopen(LOG_PATH.'/'.LOG_FILE, 'a');
+			$put = '['.date(DATE_RFC822).'] ['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300))."\n";
+			fwrite($handle, $put);
+			fclose($handle);
+		}
+	}
+}
 ?>
 
