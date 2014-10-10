@@ -38,24 +38,28 @@ You can now the token of an Usenet article with the command :
 */
 
 /*---- CONFIGURATION SECTION -----*/
-error_reporting(E_ALL);					// For debug only
+error_reporting(E_ALL);						// For debug only
 
-define('NAME', 'PHPN2J_Gateway');		// Name of this script
-define('VERSION', '0.93.r01');			// Version number
+define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
+define('GW_VERSION', '0.93.r01');			// Version number
 
-define('FROM', 'your.fqdn.domain');		// this fqdn MUST match with the source IP
-define('PATH', 'nntp_path');			// what will be in the Path section of the NNTP Article
-										// If not set, FROM will be used
-define('ACTIVE_LOG', 0);				// Set to true for logging 
-define('LOG_PATH', '/var/log/news');	// Path where is the logfile (must be writable by news user)
-define('LOG_FILE', 'n2j.log');			// Name of the log file (must be writable by news user)
+define('FROM', 'your.domain.tld');			// this fqdn MUST match with the source IP
+define('PATH', 'n2J.your.domain.tld');		// what will be in the Path section of the NNTP Article
+											// If not set, FROM will be used
+define('ACTIVE_LOG', 1);					// Set to true for logging 
+define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
+define('LOG_FILE', 'n2j.log');				// Name of the log file (must be writable by news user)
+define('SM_PATH', '/usr/local/news/bin/sm');
 
-date_default_timezone_set('UTC');		// Default Timezone to UTC (don't touch!!)
+date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
 /*--------------------------------*/
 
 /*-----    CHECK REQUIRE     -----*/ 
-if (!extension_loaded('curl')) 		{ fwrite(STDERR, "CURL Extension is missing.\n"); 	exit(1); }
-if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exex disabled.\n"); 		exit(1); }
+if (!extension_loaded('curl')) 		{ fwrite(STDERR, "CURL Extension is missing.\n"); 		exit(1); }
+if (!extension_loaded('mbstring')) 	{ fwrite(STDERR, "mbstring extension is missing.\n"); 	exit(1); }
+if (!extension_loaded('iconv')) 	{ fwrite(STDERR, "iconv extension is missing.\n"); 		exit(1); }
+if (!extension_loaded('json'))		{ fwrite(STDERR, "json extension is missing.\n");  		exit(1); }
+if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exex disabled.\n"); 			exit(1); }
 /*--------------------------------*/
 
 if (isset($argv)) {
@@ -81,7 +85,7 @@ $options = array(
 $post = null;
 $post[0] = "ihave";
 $post[1]{'Jid'} = array($article{'Jid'});
-$post[1]{'From'} = DOMAIN;
+$post[1]{'From'} = FROM;
 
 $post = json_encode($post);
 $options[CURLOPT_POSTFIELDS] = $post;
@@ -92,21 +96,23 @@ $reponse = curl_exec($CURL);
 NNTP::logGateway($reponse, $server, '<');
 $reponse = json_decode($reponse, true);
 
-if($reponse[0] === 'iwant' && $reponse[1]{'Jid'}[0] === $article{'Jid'})
+if($reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0)
 {
-	$post = array();
-	$post[0] = "diffuse";
-	$post[1]{'From'} = DOMAIN;
-	$post[1]{'Packet'} = $article;
+	if ($reponse[1]{'Jid'}[0] === $article{'Jid'}) {
+		$post = array();
+		$post[0] = "diffuse";
+		$post[1]{'From'} = FROM;
+		$post[1]{'Packet'} = $article;
 
-	$post = json_encode($post);
-	$options[CURLOPT_POSTFIELDS] = $post;
-	NNTP::logGateway($post, $server, '>');
+		$post = json_encode($post);
+		$options[CURLOPT_POSTFIELDS] = $post;
+		NNTP::logGateway($post, $server, '>');
 
-	curl_setopt_array($CURL, $options);
-	$reponse = curl_exec($CURL);
-	NNTP::logGateway($reponse, $server, '<');
-	$reponse = json_decode($reponse, true);
+		curl_setopt_array($CURL, $options);
+		$reponse = curl_exec($CURL);
+		NNTP::logGateway($reponse, $server, '<');
+		$reponse = json_decode($reponse, true);
+	}
 }
 
 curl_close($CURL);
@@ -146,11 +152,11 @@ class NNTP
 
 			if($champ === "path" && strrpos($value, "!from-jntp"))
 			{
-				die();
+				exit(1);
 			}
 			elseif($champ === "jntp-protocol")
 			{
-				die();
+				exit(1);
 			}
 			elseif($champ === "control")
 			{
@@ -276,7 +282,7 @@ class NNTP
 				{
 					$start = strpos($value,"(") + 1;
 					$end =  strpos($value,")",$start);
-					$xtracedate = substr($xtrace, $start, $end - $start);
+					$xtracedate = substr($value, $start, $end - $start);
 				}
 			}
 			elseif ($champ !== "xref")
@@ -293,7 +299,7 @@ class NNTP
 			$article{'Data'}{'ThreadID'} = $article{'Jid'};
 		}
 
-		$article{'Data'}{'NNTPHeaders'}{'Gateway'} = NAME.' '.VERSION;
+		$article{'Data'}{'NNTPHeaders'}{'Gateway'} = GW_NAME.' '.GW_VERSION;
 		if(!$isContentType){
 			$charset = mb_detect_encoding($body);
 			$article{'Data'}{'NNTPHeaders'}{'CharsetDetect'} = $charset;
@@ -326,7 +332,7 @@ class NNTP
 		}
 		else
 		{
-			die();
+			exit(1);
 		}
 	
 		$now = new DateTime("now");
@@ -338,7 +344,7 @@ class NNTP
 			$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Offset'} = $date_offset->format('%R%H:%I:%S');
 			$injection_date = $now;
 		}
-		$article{'Data'}{'NNTPHeaders'}{'Path'} = 'n2j.gegeweb!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
+		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
 		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");
 		$pattern = '/\n-- \n((.|\n)*|$)/';
 		$body = preg_replace($pattern, "\n[signature]$1[/signature]", $body);
@@ -359,4 +365,3 @@ class NNTP
 	}
 }
 ?>
-
