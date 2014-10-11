@@ -41,10 +41,9 @@ You can know the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r03');			// Version number
+define('GW_VERSION', '0.93.r04');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
-define('PATH', 'n2J.'.$domain);				// what will be in the Path section of the NNTP Article
 											// If not set, $domain will be used
 define('LOG_SYSLOG', 1);					// Set to true for logging to syslog (news.notice)											
 define('ACTIVE_LOG', 0);					// Set to true for logging to file
@@ -68,6 +67,10 @@ if (isset($argv)) {
 	if (!empty($argv[2])) $server = $argv[2];	else { fwrite(STDERR, "server is missing.\n");	exit(1); }
 	if (!empty($argv[3])) $domain = $argv[3];	// Set From with the 3rd argv
 }
+define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Header Path
+
+
+if(LOG_SYSLOG) openlog("php_n2jgateway", LOG_PID | LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
 
 $CURL = curl_init();
 if(empty($CURL)) { fwrite(STDERR, "CURL not ready.\n"); exit(1); }
@@ -117,6 +120,9 @@ if($reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0 && $reponse[1]{'Jid'
 
 curl_close($CURL);
 
+if(LOG_SYSLOG) closelog(); // Close syslog connection (if LOG_SYLOG set to true)
+
+exit(0);
 
 /*----- Class NNTP From PhpNemoServer -----*/
 
@@ -362,12 +368,8 @@ class NNTP
 			fwrite($handle, $put);
 			fclose($handle);
 		}
-		if(LOG_SYSLOG)	// Log to syslog (news.notice)
-		{
-			openlog("php_n2jgateway ", LOG_PID | LOG_PERROR, LOG_NEWS);
-			syslog(LOG_NOTICE, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
-			closelog();
-		}
+		// Log to syslog (news.notice)
+		if(LOG_SYSLOG) syslog(LOG_NOTICE, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
 	}
 }
 ?>
