@@ -35,16 +35,17 @@ Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server] [from (optional)]
 
 You can know the token of an Usenet article with the command :
 /usr/local/news/bin/grephistory '<Message-ID>'
+
 */
 
 /*---- CONFIGURATION SECTION -----*/
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r04');			// Version number
+define('GW_VERSION', '0.93.r05');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
-											// If not set, $domain will be used
+											// If not set, $domain will be used. We get the hostname from the host.
 define('LOG_SYSLOG', 1);					// Set to true for logging to syslog (news.notice)											
 define('ACTIVE_LOG', 0);					// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
@@ -52,28 +53,91 @@ define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file (LOG_PATH must b
 define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
-/*--------------------------------*/
-
-/*-----    CHECK REQUIRE     -----*/ 
-if (!extension_loaded('curl')) 		{ fwrite(STDERR, "CURL Extension is missing.\n"); 		exit(1); }
-if (!extension_loaded('mbstring')) 	{ fwrite(STDERR, "mbstring extension is missing.\n"); 	exit(1); }
-if (!extension_loaded('iconv')) 	{ fwrite(STDERR, "iconv extension is missing.\n"); 		exit(1); }
-if (!extension_loaded('json'))		{ fwrite(STDERR, "json extension is missing.\n");  		exit(1); }
-if (!function_exists('shell_exec'))	{ fwrite(STDERR, "Shell exec disabled.\n"); 			exit(1); }
-/*--------------------------------*/
-
-if (isset($argv)) {
-	if (!empty($argv[1])) $token = $argv[1];	else { fwrite(STDERR, "token is missing.\n");	exit(1); }
-	if (!empty($argv[2])) $server = $argv[2];	else { fwrite(STDERR, "server is missing.\n");	exit(1); }
-	if (!empty($argv[3])) $domain = $argv[3];	// Set From with the 3rd argv
-}
-define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Header Path
-
 
 if(LOG_SYSLOG) openlog("php_n2jgateway", LOG_PID | LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
 
+/*-----    CHECK REQUIRE     -----*/ 
+if (!extension_loaded('curl')) { 			// on FreeBSD you need to install php5-curl 
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"CURL Extension is missing!");
+		closelog();
+	}
+	fwrite(STDERR, "CURL Extension is missing!\n");
+	exit(1);
+}
+if (!extension_loaded('mbstring')) {  		// on FreeBSD you need to install php5-mbstring 
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"mbstring extension is missing!");
+		closelog();
+	}
+	fwrite(STDERR, "mbstring extension is missing!\n");
+	exit(1);
+}
+if (!extension_loaded('iconv')) {			// on FreeBSD you need to install php5-iconv
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"iconv extension is missing!");
+		closelog();
+	}
+	fwrite(STDERR, "iconv extension is missing!\n");
+	exit(1);
+}
+if (!extension_loaded('json')) {			// on FreeBSD you need to install php5-json
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"json extension is missing!");
+		closelog();
+	}
+	fwrite(STDERR, "json extension is missing!\n");
+	exit(1);
+}
+if (!function_exists('shell_exec')) {		// You need to allow shell_exec in your php.ini
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"Shell exec disabled!");
+		closelog();
+	}
+	fwrite(STDERR, "Shell exec disabled!\n");
+	exit(1);
+}
+/*--------------------------------*/
+
+if (isset($argv)) {
+	if (!empty($argv[1]) && $argv[1] === "help") {
+		fwrite(STDERR, "Usage : n2j_gateway.php token server [from]\n");
+		if(LOG_SYSLOG) closelog();
+		exit(0);
+	}
+	if (!empty($argv[1])) $token = $argv[1];
+	else {
+		if(LOG_SYSLOG) {
+			syslog(LOG_ERR,"token argument is missing!");
+			closelog();
+		}
+		fwrite(STDERR, "token argument is missing!\n");
+		exit(1);
+	}
+	if (!empty($argv[2])) $server = $argv[2];
+	else {
+		if(LOG_SYSLOG) {
+			syslog(LOG_ERR,"server argument is missing!");
+			closelog();
+		}
+		fwrite(STDERR, "server argument is missing!\n");
+		exit(1);
+	}
+	if (!empty($argv[3])) $domain = $argv[3];	// Set the 'From' with the 3rd argv
+}
+
+define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Header Path
+/*--- END CONFIGURATION SECTION ---*/
+
 $CURL = curl_init();
-if(empty($CURL)) { fwrite(STDERR, "CURL not ready.\n"); exit(1); }
+if(empty($CURL)) {
+	if(LOG_SYSLOG) {
+		syslog(LOG_ERR,"CURL not ready.");
+		closelog();
+	}
+	fwrite(STDERR, "CURL not ready.\n");
+	exit(1);
+}
 
 $article = NNTP::articleN2J(shell_exec(SM_PATH." ".$token));
 
@@ -101,7 +165,7 @@ $reponse = curl_exec($CURL);
 NNTP::logGateway($reponse, $server, '<');
 $reponse = json_decode($reponse, true);
 
-if($reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0 && $reponse[1]{'Jid'}[0] === $article{'Jid'})
+if(if count($reponse[0) !=0 && $reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0 && $reponse[1]{'Jid'}[0] === $article{'Jid'})
 {
 	$post = array();
 	$post[0] = "diffuse";
@@ -124,7 +188,7 @@ if(LOG_SYSLOG) closelog(); // Close syslog connection (if LOG_SYLOG set to true)
 
 exit(0);
 
-/*----- Class NNTP From PhpNemoServer -----*/
+/*----- Class NNTP From PhpNemoServer 0.85c -----*/
 
 class NNTP
 {
@@ -298,7 +362,7 @@ class NNTP
 		}
 		
 		/*
-			Take first Référence if présent for ThreadID
+			Fix ThreadID with JID if not References else do nothing
 		*/
 		if(count($article{'Data'}{'References'}) == 0)
 		{
@@ -316,28 +380,26 @@ class NNTP
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'NNTP-Posting-Date';
 		}
 		elseif($article{'Data'}{'NNTPHeaders'}{'Injection-Date'})
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Injection-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Injection-Date';		
 		}
 		elseif(isset($xtracedate))
 		{
 			$injection_date = new DateTime($xtracedate);
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'X-Trace';			
 		}
 		elseif($article{'Data'}{'NNTPHeaders'}{'Date'})
 		{
 			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
-			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Header'} = 'Date';	
 		}
 		else
 		{
+			NNTP::logGateway("Header Date missing in <".$article{'Jid'}.">", $domain, ':');
+			if(LOG_SYSLOG) closelog();
 			exit(1);
 		}
 	
@@ -347,7 +409,6 @@ class NNTP
 		if ($injection_date->getTimestamp() > $now->getTimestamp()) 
 		{
 			$date_offset = $now->diff($injection_date);
-			//$article{'Data'}{'NNTPHeaders'}{'X-InjectionDate-Offset'} = $date_offset->format('%R%H:%I:%S');
 			$injection_date = $now;
 		}
 		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
