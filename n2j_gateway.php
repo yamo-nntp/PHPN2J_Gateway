@@ -42,56 +42,56 @@ You can know the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r05');			// Version number
+define('GW_VERSION', '0.93.r06');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
 											// If not set, $domain will be used. We get the hostname from the host.
-define('SYLOG_LOG', 1);					// Set to true for logging to syslog (news.notice)											
+define('SYSLOG_LOG', 0);					// Set to true for logging to syslog (news.notice)											
 define('ACTIVE_LOG', 0);					// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
-define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file (LOG_PATH must be writable by news user)
+define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file
 define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
 
-if(SYLOG_LOG) openlog("php_n2jgateway", LOG_PID | LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
+if(SYSLOG_LOG) openlog("php_n2jgateway", LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
 
 /*-----    CHECK REQUIRE     -----*/ 
 if (!extension_loaded('curl')) { 			// on FreeBSD you need to install php5-curl 
-	if(SYLOG_LOG) {
-		syslog(LOG_ERR,"CURL Extension is missing!");
+	if(SYSLOG_LOG) {
+		syslog(LOG_CRIT,"CURL Extension is missing!");
 		closelog();
 	}
 	fwrite(STDERR, "CURL Extension is missing!\n");
 	exit(1);
 }
 if (!extension_loaded('mbstring')) {  		// on FreeBSD you need to install php5-mbstring 
-	if(SYLOG_LOG) {
-		syslog(LOG_ERR,"mbstring extension is missing!");
+	if(SYSLOG_LOG) {
+		syslog(LOG_CRIT,"mbstring extension is missing!");
 		closelog();
 	}
 	fwrite(STDERR, "mbstring extension is missing!\n");
 	exit(1);
 }
 if (!extension_loaded('iconv')) {			// on FreeBSD you need to install php5-iconv
-	if(SYLOG_LOG) {
-		syslog(LOG_ERR,"iconv extension is missing!");
+	if(SYSLOG_LOG) {
+		syslog(LOG_CRIT,"iconv extension is missing!");
 		closelog();
 	}
 	fwrite(STDERR, "iconv extension is missing!\n");
 	exit(1);
 }
 if (!extension_loaded('json')) {			// on FreeBSD you need to install php5-json
-	if(SYLOG_LOG) {
-		syslog(LOG_ERR,"json extension is missing!");
+	if(SYSLOG_LOG) {
+		syslog(LOG_CRIT,"json extension is missing!");
 		closelog();
 	}
 	fwrite(STDERR, "json extension is missing!\n");
 	exit(1);
 }
 if (!function_exists('shell_exec')) {		// You need to allow shell_exec in your php.ini
-	if(SYLOG_LOG) {
-		syslog(LOG_ERR,"Shell exec disabled!");
+	if(SYSLOG_LOG) {
+		syslog(LOG_CRIT,"Shell exec disabled!");
 		closelog();
 	}
 	fwrite(STDERR, "Shell exec disabled!\n");
@@ -102,12 +102,12 @@ if (!function_exists('shell_exec')) {		// You need to allow shell_exec in your p
 if (isset($argv)) {
 	if (!empty($argv[1]) && $argv[1] === "help") {
 		fwrite(STDERR, "Usage : n2j_gateway.php token server [from]\n");
-		if(SYLOG_LOG) closelog();
+		if(SYSLOG_LOG) closelog();
 		exit(0);
 	}
 	if (!empty($argv[1])) $token = $argv[1];
 	else {
-		if(SYLOG_LOG) {
+		if(SYSLOG_LOG) {
 			syslog(LOG_ERR,"token argument is missing!");
 			closelog();
 		}
@@ -116,7 +116,7 @@ if (isset($argv)) {
 	}
 	if (!empty($argv[2])) $server = $argv[2];
 	else {
-		if(SYLOG_LOG) {
+		if(SYSLOG_LOG) {
 			syslog(LOG_ERR,"server argument is missing!");
 			closelog();
 		}
@@ -131,7 +131,7 @@ define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Head
 
 $CURL = curl_init();
 if(empty($CURL)) {
-	if(SYLOG_LOG) {
+	if(SYSLOG_LOG) {
 		syslog(LOG_ERR,"CURL not ready.");
 		closelog();
 	}
@@ -184,7 +184,7 @@ if(isset($reponse[0]) && $reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=
 
 curl_close($CURL);
 
-if(SYLOG_LOG) closelog(); // Close syslog connection (if LOG_SYLOG set to true)
+if(SYSLOG_LOG) closelog(); // Close syslog connection (if LOG_SYLOG set to true)
 
 exit(0);
 
@@ -399,7 +399,7 @@ class NNTP
 		else
 		{
 			NNTP::logGateway("Header Date missing in <".$article{'Jid'}.">", $domain, ':');
-			if(SYLOG_LOG) closelog();
+			if(SYSLOG_LOG) closelog();
 			exit(1);
 		}
 	
@@ -413,8 +413,6 @@ class NNTP
 		}
 		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
 		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");
-		$pattern = '/\n-- \n((.|\n)*|$)/';
-		$body = preg_replace($pattern, "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
 
 		return $article;
@@ -430,7 +428,7 @@ class NNTP
 			fclose($handle);
 		}
 		// Log to syslog (news.notice)
-		if(SYLOG_LOG) syslog(LOG_NOTICE, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
+		if(SYSLOG_LOG) syslog(LOG_INFO, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
 	}
 }
 ?>
