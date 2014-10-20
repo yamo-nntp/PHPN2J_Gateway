@@ -42,7 +42,7 @@ You can know the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r07');			// Version number
+define('GW_VERSION', '0.93.r08');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
 											// If not set, $domain will be used. We get the hostname from the host.
@@ -129,6 +129,17 @@ if (isset($argv)) {
 define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Header Path
 /*--- END CONFIGURATION SECTION ---*/
 
+
+$article = shell_exec(SM_PATH." ".$token);
+
+if (!$article) {
+	NNTP::logGateway('could not retrieve token '.$token, $domain, ':');
+	fwrite(STDERR, "could not retrieve token $token\n");
+	exit(1);
+}
+
+$article = NNTP::articleN2J($article);
+
 $CURL = curl_init();
 if(empty($CURL)) {
 	if(SYSLOG_LOG) {
@@ -138,8 +149,6 @@ if(empty($CURL)) {
 	fwrite(STDERR, "CURL not ready.\n");
 	exit(1);
 }
-
-$article = NNTP::articleN2J(shell_exec(SM_PATH." ".$token));
 
 $options = array(
 	CURLOPT_URL            => 'http://'.$server.'/jntp/',
@@ -413,7 +422,7 @@ class NNTP
 		}
 		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
 		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");		
-		$body = preg_replace('/\n-- \n((.|\n)*|$)/', "\n["."signature]$1[/signature"."]", $body);
+		$body = preg_replace('/\n-- \n(.*)/s', "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
 
 		return $article;
