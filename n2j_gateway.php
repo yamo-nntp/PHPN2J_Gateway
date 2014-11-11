@@ -42,12 +42,12 @@ You can know the token of an Usenet article with the command :
 error_reporting(E_ALL);						// For debug only
 
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r08');			// Version number
+define('GW_VERSION', '0.93.r09');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
 											// If not set, $domain will be used. We get the hostname from the host.
 define('SYSLOG_LOG', 0);					// Set to true for logging to syslog (news.notice)											
-define('ACTIVE_LOG', 0);					// Set to true for logging to file
+define('ACTIVE_LOG', 1);					// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
 define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file
 define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
@@ -422,7 +422,7 @@ class NNTP
 		}
 		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
 		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");		
-		$body = preg_replace('/\n-- \n(.*)/s', "\n[signature]$1[/signature]", $body);
+		$body = preg_replace('/\n-- \n(?![\s\S]*\n-- \n)([\s\S]+)/', "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
 
 		return $article;
