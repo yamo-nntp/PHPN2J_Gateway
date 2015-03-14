@@ -41,13 +41,14 @@ You can know the token of an Usenet article with the command :
 /*---- CONFIGURATION SECTION -----*/
 error_reporting(E_ALL);						// For debug only
 
+define('ORIGIN_SERVER', 'n2j.myserver.net');
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.93.r09');			// Version number
+define('GW_VERSION', '0.94.r01');			// Version number
 
 $domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
 											// If not set, $domain will be used. We get the hostname from the host.
 define('SYSLOG_LOG', 0);					// Set to true for logging to syslog (news.notice)											
-define('ACTIVE_LOG', 1);					// Set to true for logging to file
+define('ACTIVE_LOG', 0);					// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
 define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file
 define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
@@ -99,8 +100,17 @@ if (!function_exists('shell_exec')) {		// You need to allow shell_exec in your p
 }
 /*--------------------------------*/
 
+
+
 if (isset($argv)) {
-	if (!empty($argv[1]) && $argv[1] === "help") {
+
+	if (!empty($argv[1]) && $argv[1] === "--test") {
+		$article = file_get_contents('message');
+		echo json_encode( NNTP::articleN2J($article), JSON_PRETTY_PRINT );
+		exit(0);
+	}
+
+	if (!empty($argv[1]) && $argv[1] === "--help") {
 		fwrite(STDERR, "Usage : n2j_gateway.php token server [from]\n");
 		if(SYSLOG_LOG) closelog();
 		exit(0);
@@ -126,9 +136,7 @@ if (isset($argv)) {
 	if (!empty($argv[3])) $domain = $argv[3];	// Set the 'From' with the 3rd argv
 }
 
-define('PATH', 'n2J.'.$domain);					// what will be at the last of the NNTP Header Path
 /*--- END CONFIGURATION SECTION ---*/
-
 
 $article = shell_exec(SM_PATH." ".$token);
 
@@ -140,79 +148,149 @@ if (!$article) {
 
 $article = NNTP::articleN2J($article);
 
-$CURL = curl_init();
-if(empty($CURL)) {
-	if(SYSLOG_LOG) {
-		syslog(LOG_ERR,"CURL not ready.");
-		closelog();
-	}
-	fwrite(STDERR, "CURL not ready.\n");
-	exit(1);
-}
+$jntp = new JNTP();
 
-$options = array(
-	CURLOPT_URL            => 'http://'.$server.'/jntp/',
-	CURLOPT_RETURNTRANSFER => true,
-	CURLOPT_HEADER         => false,
-	CURLOPT_FAILONERROR    => true,
-	CURLOPT_POST           => true,
-	CURLOPT_POSTFIELDS     => '',
-	CURLOPT_TIMEOUT	       => 20
-);
+$propose = array();
+$propose[0]{'Jid'} = $article{'Jid'};
+$propose[0]{'Data'}{'DataType'} = 'Article';
+$propose[0]{'Data'}{'DataID'} = $article{'Data'}{'DataID'};
 
-$post = null;
-$post[0] = "ihave";
-$post[1]{'Jid'} = array($article{'Jid'});
-$post[1]{'From'} = $domain;
+$post = array();
+$post[0] = "diffuse";
+$post[1]{'Propose'} = $propose;
+$post[1]{'From'} = DOMAIN;
 
-$post = json_encode($post);
-$options[CURLOPT_POSTFIELDS] = $post;
+$jntp->exec($post, $server);
+
 NNTP::logGateway($post, $server, '>');
+NNTP::logGateway($jntp->reponse, $server, '<');
 
-curl_setopt_array($CURL, $options);
-$reponse = curl_exec($CURL);
-NNTP::logGateway($reponse, $server, '<');
-$reponse = json_decode($reponse, true);
-
-if(isset($reponse[0]) && $reponse[0] === 'iwant' && count($reponse[1]{'Jid'}) !=0 && $reponse[1]{'Jid'}[0] === $article{'Jid'})
+if($jntp->reponse[0] == 'iwant') 
 {
-	$post = array();
-	$post[0] = "diffuse";
-	$post[1]{'From'} = $domain;
-	$post[1]{'Packet'} = $article;
+	foreach($jntp->reponse[1]{'Jid'} as $jid)
+	{
+		$post = array();
+		$post[0] = "diffuse";
+		$post[1]{'Packet'} = $article;
+		$post[1]{'From'} = DOMAIN;
+		$jntp->exec($post, $server);
 
-	$post = json_encode($post);
-	$options[CURLOPT_POSTFIELDS] = $post;
-	NNTP::logGateway($post, $server, '>');
-
-	curl_setopt_array($CURL, $options);
-	$reponse = curl_exec($CURL);
-	NNTP::logGateway($reponse, $server, '<');
-	$reponse = json_decode($reponse, true);
+		NNTP::logGateway($post, $server, '>');
+		NNTP::logGateway($jntp->reponse, $server, '<');
+	}
 }
-
-curl_close($CURL);
 
 if(SYSLOG_LOG) closelog(); // Close syslog connection (if LOG_SYLOG set to true)
 
 exit(0);
 
-/*----- Class NNTP (modified version from PHP NemoServer) -----*/
+/*----- extract of Class JNTP (modified version from PHP NemoServer) -----*/
+
+class JNTP
+{
+	// Constructeur
+	function __construct() {}
+
+	function exec($post, $server)
+	{
+		if(empty($CURL)) {
+			if(SYSLOG_LOG) {
+				syslog(LOG_ERR,"CURL not ready.");
+				closelog();
+			}
+			fwrite(STDERR, "CURL not ready.\n");
+			exit(1);
+		}
+
+		$post = is_array($post) ? json_encode($post) : $post;
+
+		$options = array(
+			CURLOPT_URL            => "http://".$server."/jntp/",
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_HEADER         => false,
+			CURLOPT_FAILONERROR    => true,
+			CURLOPT_POST           => true,
+			CURLOPT_TIMEOUT	       => 20,
+			CURLOPT_POSTFIELDS     => $post
+		);
+
+		$CURL = curl_init();
+		if(!empty($CURL)) 
+		{
+			curl_setopt_array($CURL, $options);
+			$reponse = curl_exec($CURL);
+			curl_close($CURL);
+			$this->reponse = json_decode($reponse, true);
+		}
+		else
+		{
+			$this->reponse{'code'} = "500";
+			$this->reponse{'body'} = "Connection failed";
+		}
+		return;
+	}
+
+	static function canonicFormat($json, $firstRecursivLevel = true)
+	{
+		if (is_array($json) ) 
+		{
+			foreach ($json as $key => $value) 
+			{
+				if(is_array($value) || is_int($key) )
+				{
+					$json[$key] = self::canonicFormat($value, false);
+				}
+				else
+				{
+					if(strlen($value) > 27)
+					{
+						$json['#'.$key] = self::hashString($value);
+						unset( $json[$key] );
+					}
+				}
+			}
+		}
+		if( $firstRecursivLevel ) return (json_encode(self::sortJSON($json), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+		return $json;
+	}
+
+	static function sortJSON($json)
+	{
+		if (is_array($json) ) 
+		{
+			ksort($json);
+			foreach ($json as $key => $value) 
+			{
+				if(is_array($value) || is_int($key) )
+				{
+					$json[$key] = self::sortJSON($value);
+				}
+			}
+		}
+		return $json;
+	}
+
+	static function hashString($str)
+	{
+		return rtrim(strtr(base64_encode(sha1($str, true)), '+/', '-_'), '='); 
+	}
+
+}
+
+/*----- Class NNTP -----*/
 
 class NNTP
 {
 	static function articleN2J($txt)
 	{
 		
-		$article = null;
-		$article{'Jid'} = null;
+		$article = array();
 		$article{'Route'} = array();
 		$article{'Data'}{'DataType'} = "Article";
+		$article{'Data'}{'OriginServer'} = ORIGIN_SERVER;
 		$article{'Data'}{'References'} = array();
 		$article{'Data'}{'FollowupTo'} = array();
-		$article{'Data'}{'NNTPHeaders'} = null;
-		$article{'Data'}{'Protocol'} = "JNTP-Transitional";
-		$article{'Data'}{'Origin'} = "NNTP";
+		$article{'Data'}{'NNTPHeaders'} = array();
 
 		$pos =  strpos($txt, "\n\n");
 		$head = substr($txt, 0, $pos);
@@ -230,10 +308,6 @@ class NNTP
 			$value = substr($ligne, $pos + 2);
 
 			if($champ === "path" && strrpos($value, "!from-jntp"))
-			{
-				exit(1);
-			}
-			elseif($champ === "jntp-protocol")
 			{
 				exit(1);
 			}
@@ -267,7 +341,7 @@ class NNTP
 			elseif($champ === "message-id") 
 			{
 				$value = trim($value);
-				$article{'Jid'} = substr($value, 1, strlen($value)-2);
+				$article{'Data'}{'DataID'} = substr($value, 1, strlen($value)-2);
 			}
 			elseif($champ === "from") 
 			{
@@ -342,18 +416,6 @@ class NNTP
 				}
 				$article{'Data'}{'NNTPHeaders'}{'Content-Transfer-Encoding'} = $value;
 			}
-			elseif($champ === "nntp-posting-date")
-			{
-				$article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'} = $value;
-			}
-			elseif($champ === "injection-date")
-			{
-				$article{'Data'}{'NNTPHeaders'}{'Injection-Date'} = $value;		
-			}
-			elseif($champ === "date")
-			{
-				$article{'Data'}{'NNTPHeaders'}{'Date'} = $value;
-			}
 			elseif($champ === "x-trace")
 			{
 				$article{'Data'}{'NNTPHeaders'}{'X-Trace'} = $value;
@@ -375,7 +437,7 @@ class NNTP
 		*/
 		if(count($article{'Data'}{'References'}) == 0)
 		{
-			$article{'Data'}{'ThreadID'} = $article{'Jid'};
+			$article{'Data'}{'ThreadID'} = $article{'Data'}{'DataID'};
 		}
 
 		$article{'Data'}{'NNTPHeaders'}{'Gateway'} = GW_NAME.' '.GW_VERSION;
@@ -420,10 +482,11 @@ class NNTP
 			$date_offset = $now->diff($injection_date);
 			$injection_date = $now;
 		}
-		$article{'Data'}{'NNTPHeaders'}{'Path'} = PATH.'!'.$article{'Data'}{'NNTPHeaders'}{'Path'};
 		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");		
 		$body = preg_replace('/\n-- \n(?![\s\S]*\n-- \n)([\s\S]+)/', "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
+
+		$article{'Jid'} = JNTP::hashString( JNTP::canonicFormat($article{'Data'}) ).'@'.ORIGIN_SERVER;
 
 		return $article;
 	}
@@ -432,6 +495,7 @@ class NNTP
 	{
 		if(ACTIVE_LOG)	// Log to file
 		{
+			$post = is_array($post) ? json_encode($post) : $post;
 			$handle = fopen(LOG_PATH.'/'.LOG_FILE, 'a');
 			$put = '['.date(DATE_RFC822).'] ['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300))."\n";
 			fwrite($handle, $put);
