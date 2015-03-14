@@ -193,6 +193,7 @@ class JNTP
 
 	function exec($post, $server)
 	{
+		$CURL = curl_init();
 		if(empty($CURL)) {
 			if(SYSLOG_LOG) {
 				syslog(LOG_ERR,"CURL not ready.");
@@ -214,7 +215,6 @@ class JNTP
 			CURLOPT_POSTFIELDS     => $post
 		);
 
-		$CURL = curl_init();
 		if(!empty($CURL)) 
 		{
 			curl_setopt_array($CURL, $options);
