@@ -29,9 +29,9 @@ Copy this file and rename it wathever you want.
 Better is to copy it in path_to_inn/bin and keep the name (in FreeBSD: /usr/local/news/bin/n2j_gateway.php).
 Set the executable bit : chmod +x /usr/local/news/bin/n2j_gateway.php
 Configure your newsfeeds file, for example :
-JNTP!/from-jntp:[group pattern]:Tp,Wf:/usr/local/news/bin/n2j_gateway.php %s [server] [from (optional)]
+JNTP!/from-jntp:[group pattern]:Tp,Wf:/usr/local/news/bin/n2j_gateway.php %s [server]
 
-Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server] [from (optional)] 
+Manualy : /usr/local/news/bin/n2j_gateway.php [token] [server]
 
 You can know the token of an Usenet article with the command :
 /usr/local/news/bin/grephistory '<Message-ID>'
@@ -43,12 +43,9 @@ error_reporting(E_ALL);						// For debug only
 
 define('ORIGIN_SERVER', 'n2j.myserver.net');
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r01');			// Version number
-
-$domain = gethostname();					// this fqdn MUST match with the source IP else use optionnal from argv.
-											// If not set, $domain will be used. We get the hostname from the host.
-define('SYSLOG_LOG', 0);					// Set to true for logging to syslog (news.notice)											
-define('ACTIVE_LOG', 0);					// Set to true for logging to file
+define('GW_VERSION', '0.94.r01');		// Version number
+define('SYSLOG_LOG', 0);			// Set to true for logging to syslog (news.notice)											
+define('ACTIVE_LOG', 0);			// Set to true for logging to file
 define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
 define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file
 define('SM_PATH', '/usr/local/news/bin/sm');// Path to sm binary
@@ -133,7 +130,6 @@ if (isset($argv)) {
 		fwrite(STDERR, "server argument is missing!\n");
 		exit(1);
 	}
-	if (!empty($argv[3])) $domain = $argv[3];	// Set the 'From' with the 3rd argv
 }
 
 /*--- END CONFIGURATION SECTION ---*/
@@ -141,7 +137,7 @@ if (isset($argv)) {
 $article = shell_exec(SM_PATH." ".$token);
 
 if (!$article) {
-	NNTP::logGateway('could not retrieve token '.$token, $domain, ':');
+	NNTP::logGateway('could not retrieve token '.$token, ORIGIN_SERVER, ':');
 	fwrite(STDERR, "could not retrieve token $token\n");
 	exit(1);
 }
@@ -158,7 +154,7 @@ $propose[0]{'Data'}{'DataID'} = $article{'Data'}{'DataID'};
 $post = array();
 $post[0] = "diffuse";
 $post[1]{'Propose'} = $propose;
-$post[1]{'From'} = DOMAIN;
+$post[1]{'From'} = ORIGIN_SERVER;
 
 $jntp->exec($post, $server);
 
@@ -172,7 +168,7 @@ if($jntp->reponse[0] == 'iwant')
 		$post = array();
 		$post[0] = "diffuse";
 		$post[1]{'Packet'} = $article;
-		$post[1]{'From'} = DOMAIN;
+		$post[1]{'From'} = ORIGIN_SERVER;
 		$jntp->exec($post, $server);
 
 		NNTP::logGateway($post, $server, '>');
@@ -469,7 +465,7 @@ class NNTP
 		}
 		else
 		{
-			NNTP::logGateway("Header Date missing in <".$article{'Jid'}.">", $domain, ':');
+			NNTP::logGateway("Header Date missing in <".$article{'Jid'}.">", ORIGIN_SERVER, ':');
 			if(SYSLOG_LOG) closelog();
 			exit(1);
 		}
