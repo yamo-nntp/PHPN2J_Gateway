@@ -287,6 +287,7 @@ class NNTP
 		$article{'Data'}{'References'} = array();
 		$article{'Data'}{'FollowupTo'} = array();
 		$article{'Data'}{'NNTPHeaders'} = array();
+		$article{'Data'}{'Server'} = GW_NAME.' '.GW_VERSION;
 
 		$pos =  strpos($txt, "\n\n");
 		$head = substr($txt, 0, $pos);
@@ -436,7 +437,6 @@ class NNTP
 			$article{'Data'}{'ThreadID'} = $article{'Data'}{'DataID'};
 		}
 
-		$article{'Data'}{'NNTPHeaders'}{'Gateway'} = GW_NAME.' '.GW_VERSION;
 		if(!$isContentType){
 			$charset = mb_detect_encoding($body);
 			$article{'Data'}{'NNTPHeaders'}{'CharsetDetect'} = $charset;
