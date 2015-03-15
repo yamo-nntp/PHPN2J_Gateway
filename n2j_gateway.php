@@ -281,7 +281,7 @@ class NNTP
 	{
 		
 		$article = array();
-		$article{'Route'} = array();
+		$article{'Route'} = array(ORIGIN_SERVER);
 		$article{'Data'}{'DataType'} = "Article";
 		$article{'Data'}{'OriginServer'} = ORIGIN_SERVER;
 		$article{'Data'}{'References'} = array();
