@@ -282,11 +282,12 @@ class NNTP
 		
 		$article = array();
 		$article{'Route'} = array(ORIGIN_SERVER);
-		$article{'Data'}{'DataType'} = "Article";
+		$article{'Data'}{'DataType'} = 'Article';
 		$article{'Data'}{'OriginServer'} = ORIGIN_SERVER;
 		$article{'Data'}{'References'} = array();
 		$article{'Data'}{'FollowupTo'} = array();
-		$article{'Data'}{'NNTPHeaders'} = array();
+		$article{'Data'}{'OriginHeaders'} = array();
+		$article{'Data'}{'Origin'} = 'NNTP';
 		$article{'Data'}{'Server'} = GW_NAME.' '.GW_VERSION;
 
 		$pos =  strpos($txt, "\n\n");
@@ -399,7 +400,7 @@ class NNTP
 				$regexp = "/;{$optFWS}{$pattern}{$optFWS}(?:[(;]|$)/i";
 				$charset = preg_match($regexp, $value, $matches) ? $matches[2] : "UTF-8";
 				$isContentType = true;
-				$article{'Data'}{'NNTPHeaders'}{'Content-Type'} = $value;
+				$article{'Data'}{'OriginHeaders'}{'Content-Type'} = $value;
 			}
 			elseif($champ === "content-transfer-encoding")
 			{
@@ -411,11 +412,11 @@ class NNTP
 				{
 					$body = base64_decode($body);
 				}
-				$article{'Data'}{'NNTPHeaders'}{'Content-Transfer-Encoding'} = $value;
+				$article{'Data'}{'OriginHeaders'}{'Content-Transfer-Encoding'} = $value;
 			}
 			elseif($champ === "x-trace")
 			{
-				$article{'Data'}{'NNTPHeaders'}{'X-Trace'} = $value;
+				$article{'Data'}{'OriginHeaders'}{'X-Trace'} = $value;
 				if (strpos($value,"("))
 				{
 					$start = strpos($value,"(") + 1;
@@ -425,7 +426,7 @@ class NNTP
 			}
 			elseif ($champ !== "xref")
 			{
-				$article{'Data'}{'NNTPHeaders'}{$header} = $value;
+				$article{'Data'}{'OriginHeaders'}{$header} = $value;
 			}
 		}
 		
@@ -439,18 +440,18 @@ class NNTP
 
 		if(!$isContentType){
 			$charset = mb_detect_encoding($body);
-			$article{'Data'}{'NNTPHeaders'}{'CharsetDetect'} = $charset;
+			$article{'Data'}{'OriginHeaders'}{'CharsetDetect'} = $charset;
 		}
 
 
-		if(isset($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'}))
+		if(isset($article{'Data'}{'OriginHeaders'}{'NNTP-Posting-Date'}))
 		{
-			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'NNTP-Posting-Date'});
+			$injection_date = new DateTime($article{'Data'}{'OriginHeaders'}{'NNTP-Posting-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
 		}
-		elseif(isset($article{'Data'}{'NNTPHeaders'}{'Injection-Date'}))
+		elseif(isset($article{'Data'}{'OriginHeaders'}{'Injection-Date'}))
 		{
-			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Injection-Date'});
+			$injection_date = new DateTime($article{'Data'}{'OriginHeaders'}{'Injection-Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
 		}
 		elseif(isset($xtracedate))
@@ -458,9 +459,9 @@ class NNTP
 			$injection_date = new DateTime($xtracedate);
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
 		}
-		elseif(isset($article{'Data'}{'NNTPHeaders'}{'Date'}))
+		elseif(isset($article{'Data'}{'OriginHeaders'}{'Date'}))
 		{
-			$injection_date = new DateTime($article{'Data'}{'NNTPHeaders'}{'Date'});
+			$injection_date = new DateTime($article{'Data'}{'OriginHeaders'}{'Date'});
 			$injection_date->setTimezone(new DateTimeZone('UTC'));
 		}
 		else
