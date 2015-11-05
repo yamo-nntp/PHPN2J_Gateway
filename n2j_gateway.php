@@ -43,7 +43,7 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r04');			// Version number
+define('GW_VERSION', '0.94.r05');			// Version number
 
 define('SYSLOG_LOG', 1);					
 // Set to true for logging to syslo(news.notice)											
@@ -288,7 +288,6 @@ class NNTP
 		$article{'Route'} = array();
 		$article{'Route'} = array(ORIGIN_SERVER);
 		$article{'Data'}{'DataType'} = 'Article';
-		$article{'Data'}{'OriginServer'} = ORIGIN_SERVER;
 		$article{'Data'}{'References'} = array();
 		$article{'Data'}{'FollowupTo'} = array();
 		$article{'Data'}{'OriginHeaders'} = array();
@@ -488,7 +487,9 @@ class NNTP
 		$body = preg_replace('/\n-- \n(?![\s\S]*\n-- \n)([\s\S]+)/', "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
 
-		$article{'Jid'} = JNTP::hashString( JNTP::canonicFormat($article{'Data'}) ).'@'.ORIGIN_SERVER;
+		//$article{'Jid'} = JNTP::hashString( JNTP::canonicFormat($article{'Data'}) ).'@'.ORIGIN_SERVER;
+		//$article{'Jid'} = sha1(minifyJSON($article{'Jid'}))
+		$article{'Jid'} = JNTP::hashString( JNTP::canonicFormat($article{'Data'}) );
 
 		return $article;
 	}
