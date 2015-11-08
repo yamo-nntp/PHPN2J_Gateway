@@ -43,7 +43,7 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r05');			// Version number
+define('GW_VERSION', '0.94.r06');			// Version number
 
 define('SYSLOG_LOG', 1);					
 // Set to true for logging to syslo(news.notice)											
@@ -288,6 +288,7 @@ class NNTP
 		$article{'Route'} = array();
 		$article{'Route'} = array(ORIGIN_SERVER);
 		$article{'Data'}{'DataType'} = 'Article';
+		$article{'Data'}{'ProtocolVersion'} = '0.20.1';
 		$article{'Data'}{'References'} = array();
 		$article{'Data'}{'FollowupTo'} = array();
 		$article{'Data'}{'OriginHeaders'} = array();
