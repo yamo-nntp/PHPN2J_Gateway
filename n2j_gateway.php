@@ -43,7 +43,7 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r07');			// Version number
+define('GW_VERSION', '0.94.r08');			// Version number
 define('PROTOCOL_JNTP_VERSION', '0.21.1');
 
 define('SYSLOG_LOG', 1);					
