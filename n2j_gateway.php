@@ -43,7 +43,8 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r09');			// Version number
+define('GW_VERSION', '0.94.r12');			// Version number
+define('LOG_INFO',"PHPN2J-0.94.r12");
 define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
 define('SYSLOG_LOG', 1);					
@@ -55,7 +56,7 @@ define('SM_PATH', '/usr/lib/news/bin/sm');// Path to sm binary
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
 
-if(SYSLOG_LOG) openlog("php_n2jgateway", LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
+if(SYSLOG_LOG) openlog(LOG_INFO, LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
 
 /*-----    CHECK REQUIRE     -----*/ 
 if (!extension_loaded('curl')) { 			// on FreeBSD you need to install php5-curl 
@@ -168,7 +169,7 @@ NNTP::logGateway($jntp->reponse, $server, '<');
 
 if($jntp->reponse{'code'} == '200') 
 {
-	foreach($jntp->reponse{'body'}{'Jid'} as $jid)
+	foreach($jntp->reponse{'body'}{'Data.DataID'} as $dataid)
 	{		
 		$post = array();
 		$post[0] = "diffuse";
