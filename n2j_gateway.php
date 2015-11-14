@@ -43,8 +43,8 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r08');			// Version number
-define('PROTOCOL_JNTP_VERSION', '0.21.1');
+define('GW_VERSION', '0.94.r09');			// Version number
+define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
 define('SYSLOG_LOG', 1);					
 // Set to true for logging to syslo(news.notice)											
@@ -166,9 +166,9 @@ $jntp->exec($post, $server);
 NNTP::logGateway($post, $server, '>');
 NNTP::logGateway($jntp->reponse, $server, '<');
 
-if($jntp->reponse[0] == 'iwant') 
+if($jntp->reponse{'code'} == '200') 
 {
-	foreach($jntp->reponse[1]{'Jid'} as $jid)
+	foreach($jntp->reponse{'body'}{'Jid'} as $jid)
 	{		
 		$post = array();
 		$post[0] = "diffuse";
