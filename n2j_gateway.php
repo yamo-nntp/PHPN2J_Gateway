@@ -3,7 +3,7 @@
 /*
 PHPN2J_Gateway | Standalone N2J Gateway "NNTP to JNTP" for Inn
 
-Copyright © 2013-2014 Julien Arlandis
+Copyright © 2013-2017 Julien Arlandis
 Copyright © 2014 Gérald Niel
     @author : Julien Arlandis <julien.arlandis_at_gmail.com>
     @author : Gérald Niel <gerald.niel_at_gegeweb.org>
@@ -43,8 +43,8 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r13');			// Version number
-define('LOG_INFO',"PHPN2J-0.94.r13");
+define('GW_VERSION', '0.94.r14');			// Version number
+define('LOG_INFO',"PHPN2J-0.94.r14");
 define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
 define('SYSLOG_LOG', 1);					
@@ -325,7 +325,7 @@ class NNTP
 				if ($args[0] === 'cancel')
 				{
 					$args[1] = substr($args[1], 1, strlen($args[1])-2);
-					$article{'Data'}{'Control'} = 'cancelUser '.$args[1];
+					$article{'Data'}{'Control'} = array('cancelUser', $args[1]);
 				}
 				elseif ($args[0] === 'newgroup')
 				{
