@@ -43,8 +43,8 @@ error_reporting(E_ALL);						// For debug only
 $domain = gethostname();	
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r12');			// Version number
-define('LOG_INFO',"PHPN2J-0.94.r12");
+define('GW_VERSION', '0.94.r13');			// Version number
+define('LOG_INFO',"PHPN2J-0.94.r13");
 define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
 define('SYSLOG_LOG', 1);					
@@ -435,9 +435,12 @@ class NNTP
 			elseif ($champ !== "xref")
 			{
 				$article{'Data'}{'OriginHeaders'}{$header} = $value;
+				if ($champ === "Path")
+                                {
+                	                $article{'Data'}{'OriginHeaders'}{'NNTP-Path'} = $value;
+                                }
 			}
 		}
-		
 		/*
 			Fix ThreadID with JID if not References else do nothing
 		*/
