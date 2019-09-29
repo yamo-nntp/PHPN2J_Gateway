@@ -39,64 +39,69 @@ You can know the token of an Usenet article with the command :
 */
 
 /*---- CONFIGURATION SECTION -----*/
-error_reporting(E_ALL);						// For debug only
-$domain = gethostname();	
+error_reporting(E_ALL);					// For debug only
+$domain = gethostname();
 define('ORIGIN_SERVER', $domain);
-define('GW_NAME', 'PHP N2J Gateway');		// Name of this script
-define('GW_VERSION', '0.94.r14');			// Version number
-define('LOG_INFO',"PHPN2J-0.94.r14");
+define('GW_NAME', 'PHP N2J Gateway');			// Name of this script
+define('GW_VERSION', '0.94.r15');			// Version number
+// define('LOG_INFO',"PHPN2J-0.94.r14");
 define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
-define('SYSLOG_LOG', 1);					
-// Set to true for logging to syslo(news.notice)											
-define('ACTIVE_LOG', 1);					// Set to true for logging to file
-define('LOG_PATH', '/var/log/news');		// Path where is the logfile (must be writable by news user)
-define('LOG_FILE', 'n2j_gateway.log');		// Name of the log file
-define('SM_PATH', '/usr/lib/news/bin/sm');// Path to sm binary
+define('SYSLOG_LOG', 1);
+// Set to true for logging to syslo(news.notice)
+define('ACTIVE_LOG', 0);				// Set to true for logging to file
+define('LOG_PATH', '/var/log/news');			// Path where is the logfile (must be writable by news user)
+define('LOG_FILE', 'n2j_gateway.log');			// Name of the log file
+define('SM_PATH', '/usr/lib/news/bin/sm');		// Path to sm binary
 
 date_default_timezone_set('UTC');			// Default Timezone to UTC (don't touch!!)
 
 if(SYSLOG_LOG) openlog(LOG_INFO, LOG_PERROR, LOG_NEWS); // Open syslog connection (if LOG_SYLOG set to true)
 
-/*-----    CHECK REQUIRE     -----*/ 
-if (!extension_loaded('curl')) { 			// on FreeBSD you need to install php5-curl 
+/*-----    CHECK REQUIRE     -----*/
+if (!extension_loaded('curl')) { 			// on FreeBSD you need to install php5-curl
 	if(SYSLOG_LOG) {
 		syslog(LOG_CRIT,"CURL Extension is missing!");
 		closelog();
+	}else {
+		fwrite(STDERR, "CURL Extension is missing!\n");
 	}
-	fwrite(STDERR, "CURL Extension is missing!\n");
 	exit(1);
 }
-if (!extension_loaded('mbstring')) {  		// on FreeBSD you need to install php5-mbstring 
+if (!extension_loaded('mbstring')) {  			// on FreeBSD you need to install php5-mbstring
 	if(SYSLOG_LOG) {
 		syslog(LOG_CRIT,"mbstring extension is missing!");
 		closelog();
+	}else {
+		fwrite(STDERR, "mbstring extension is missing!\n");
 	}
-	fwrite(STDERR, "mbstring extension is missing!\n");
 	exit(1);
 }
 if (!extension_loaded('iconv')) {			// on FreeBSD you need to install php5-iconv
 	if(SYSLOG_LOG) {
 		syslog(LOG_CRIT,"iconv extension is missing!");
 		closelog();
+	}else{
+		fwrite(STDERR, "iconv extension is missing!\n");
 	}
-	fwrite(STDERR, "iconv extension is missing!\n");
 	exit(1);
 }
 if (!extension_loaded('json')) {			// on FreeBSD you need to install php5-json
 	if(SYSLOG_LOG) {
 		syslog(LOG_CRIT,"json extension is missing!");
 		closelog();
+	}else{
+		fwrite(STDERR, "json extension is missing!\n");
 	}
-	fwrite(STDERR, "json extension is missing!\n");
 	exit(1);
 }
-if (!function_exists('shell_exec')) {		// You need to allow shell_exec in your php.ini
+if (!function_exists('shell_exec')) {			// You need to allow shell_exec in your php.ini
 	if(SYSLOG_LOG) {
 		syslog(LOG_CRIT,"Shell exec disabled!");
 		closelog();
+	}else{
+		fwrite(STDERR, "Shell exec disabled!\t\tYou need to allow shell_exec in your php.ini\n");
 	}
-	fwrite(STDERR, "Shell exec disabled!\n");
 	exit(1);
 }
 /*--------------------------------*/
@@ -108,6 +113,7 @@ if (isset($argv)) {
 	if (!empty($argv[1]) && $argv[1] === "--test") {
 		$article = file_get_contents('message');
 		echo json_encode( NNTP::articleN2J($article), JSON_PRETTY_PRINT );
+		//json_encode( NNTP::articleN2J($article), JSON_PRETTY_PRINT );
 		exit(0);
 	}
 
@@ -121,8 +127,9 @@ if (isset($argv)) {
 		if(SYSLOG_LOG) {
 			syslog(LOG_ERR,"token argument is missing!");
 			closelog();
+		}else{
+			fwrite(STDERR, "token argument is missing!\n");
 		}
-		fwrite(STDERR, "token argument is missing!\n");
 		exit(1);
 	}
 	if (!empty($argv[2])) $server = $argv[2];
@@ -130,8 +137,9 @@ if (isset($argv)) {
 		if(SYSLOG_LOG) {
 			syslog(LOG_ERR,"server argument is missing!");
 			closelog();
+		}else {
+			fwrite(STDERR, "server argument is missing!\n");
 		}
-		fwrite(STDERR, "server argument is missing!\n");
 		exit(1);
 	}
 
@@ -164,8 +172,8 @@ $post[1]{'From'} = ORIGIN_SERVER;
 
 $jntp->exec($post, $server);
 
-NNTP::logGateway($post, $server, '>');
-NNTP::logGateway($jntp->reponse, $server, '<');
+//NNTP::logGateway($post, $server, '>');
+//NNTP::logGateway($jntp->reponse, $server, '<');
 
 if($jntp->reponse{'code'} == '200') 
 {
@@ -177,8 +185,8 @@ if($jntp->reponse{'code'} == '200')
 		$post[1]{'From'} = ORIGIN_SERVER;
 		$jntp->exec($post, $server);
 
-		NNTP::logGateway($post, $server, '>');
-		NNTP::logGateway($jntp->reponse, $server, '<');
+		//NNTP::logGateway($post, $server, '>');
+		//NNTP::logGateway($jntp->reponse, $server, '<');
 	}
 }
 
@@ -217,15 +225,14 @@ class JNTP
 			CURLOPT_POSTFIELDS     => $post
 		);
 
-		if(!empty($CURL)) 
+		if(!empty($CURL))
 		{
 			curl_setopt_array($CURL, $options);
 			$reponse = curl_exec($CURL);
 			curl_close($CURL);
 			$this->reponse = json_decode($reponse, true);
 		}
-		else
-		{
+		else {
 			$this->reponse{'code'} = "500";
 			$this->reponse{'body'} = "Connection failed";
 		}
@@ -234,16 +241,15 @@ class JNTP
 
 	static function canonicFormat($json, $firstRecursivLevel = true)
 	{
-		if (is_array($json) ) 
+		if (is_array($json) )
 		{
-			foreach ($json as $key => $value) 
+			foreach ($json as $key => $value)
 			{
 				if(is_array($value) || is_int($key) )
 				{
 					$json[$key] = self::canonicFormat($value, false);
 				}
-				else
-				{
+				else {
 					if(strlen($value) > 27)
 					{
 						$json['#'.$key] = self::hashString($value);
@@ -258,10 +264,10 @@ class JNTP
 
 	static function sortJSON($json)
 	{
-		if (is_array($json) ) 
+		if (is_array($json) )
 		{
 			ksort($json);
-			foreach ($json as $key => $value) 
+			foreach ($json as $key => $value)
 			{
 				if(is_array($value) || is_int($key) )
 				{
@@ -274,7 +280,7 @@ class JNTP
 
 	static function hashString($str)
 	{
-		return rtrim(strtr(base64_encode(sha1($str, true)), '+/', '-_'), '='); 
+		return rtrim(strtr(base64_encode(sha1($str, true)), '+/', '-_'), '=');
 	}
 
 }
@@ -285,7 +291,6 @@ class NNTP
 {
 	static function articleN2J($txt)
 	{
-		
 		$article = array();
 		$article{'Route'} = array();
 		$article{'Route'} = array(ORIGIN_SERVER);
@@ -340,23 +345,28 @@ class NNTP
 					$article{'Data'}{'Control'} = $args;
 				}
 			}
-			elseif($champ === "supersedes") 
+			elseif($champ === "supersedes")
 			{
 				$article{'Data'}{'Supersedes'} = substr($value, 1, strlen($value)-2);
 			}
-			elseif($champ === "message-id") 
+			elseif($champ === "message-id")
 			{
 				$value = trim($value);
 				$article{'Data'}{'DataID'} = substr($value, 1, strlen($value)-2);
 			}
-			elseif($champ === "from") 
+			elseif($champ === "from")
 			{
 				$from = iconv_mime_decode($value, 2, 'UTF-8');
 				preg_match('#<(.*?)>#', $from, $mail);
 				preg_match('#\s*(.*?)\s*<#', $from, $name);
-				$article{'Data'}{'FromName'} = "".$name[1];
-				$article{'Data'}{'FromMail'} = ($mail[1]) ? $mail[1] : $from;
-	
+				/*   $article{'Data'}{'FromName'} = "".$name[1];
+				$article{'Data'}{'FromMail'} = ($mail[1]) ? $mail[1] : $from; */
+			        if(count($mail)>1){
+					$article{'Data'}{'FromMail'} = ($mail[1]) ? $mail[1] : $from;
+				}
+				if(count($name)>1){
+					$article{'Data'}{'FromName'} = "".$name[1];
+				}
 			}
 			elseif($champ === "subject")
 			{
@@ -371,7 +381,7 @@ class NNTP
 				}
 				$article{'Data'}{'Newsgroups'} = $groupes;
 			}
-			elseif($champ === "followup-to") 
+			elseif($champ === "followup-to")
 			{
 				$groupes = explode(",", $value);
 				foreach($groupes as $groupe)
@@ -480,16 +490,15 @@ class NNTP
 			if(SYSLOG_LOG) closelog();
 			exit(1);
 		}
-	
 		$now = new DateTime("now");
 		$now->setTimezone(new DateTimeZone('UTC'));
 
-		if ($injection_date->getTimestamp() > $now->getTimestamp()) 
+		if ($injection_date->getTimestamp() > $now->getTimestamp())
 		{
 			$date_offset = $now->diff($injection_date);
 			$injection_date = $now;
 		}
-		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");		
+		$article{'Data'}{'InjectionDate'} = $injection_date->format("Y-m-d\TH:i:s\Z");
 		$body = preg_replace('/\n-- \n(?![\s\S]*\n-- \n)([\s\S]+)/', "\n[signature]$1[/signature]", $body);
 		$article{'Data'}{'Body'} = mb_convert_encoding($body, "UTF-8", $charset);
 
@@ -499,7 +508,6 @@ class NNTP
 
 		return $article;
 	}
-	
 	static function logGateway($post, $server, $direct = '<')
 	{
 		if(ACTIVE_LOG)	// Log to file
@@ -511,7 +519,7 @@ class NNTP
 			fclose($handle);
 		}
 		// Log to syslog (news.notice)
-		if(SYSLOG_LOG) syslog(LOG_INFO, '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
+		if(SYSLOG_LOG) syslog('N2J PHP', '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
 	}
 }
 ?>
