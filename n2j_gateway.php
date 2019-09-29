@@ -43,7 +43,7 @@ error_reporting(E_ALL);					// For debug only
 $domain = gethostname();
 define('ORIGIN_SERVER', $domain);
 define('GW_NAME', 'PHP N2J Gateway');			// Name of this script
-define('GW_VERSION', '0.94.r15');			// Version number
+define('GW_VERSION', '0.94.r16');			// Version number
 // define('LOG_INFO',"PHPN2J-0.94.r14");
 define('PROTOCOL_JNTP_VERSION', '0.21.3');
 
@@ -519,7 +519,7 @@ class NNTP
 			fclose($handle);
 		}
 		// Log to syslog (news.notice)
-		if(SYSLOG_LOG) syslog('N2J PHP', '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
+		if(SYSLOG_LOG) syslog(LOG_NOTICE,'N2J PHP', '['.$server.'] '.$direct.' '.rtrim(mb_strimwidth($post, 0, 300)));
 	}
 }
 ?>
